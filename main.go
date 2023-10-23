@@ -77,10 +77,12 @@ var (
 	logFormat                 = kingpin.Flag("log.format", "set log format: text, json (default text)").Default("text").Envar("LOG_FORMAT").String()
 	storageBackend            = kingpin.Flag("storage.backend", "storage backend: filesystem, kubernetes.secrets (default filesystem)").Default("filesystem").Envar("STORAGE_BACKEND").String()
 
+	basicAuthUser = kingpin.Flag("basic.username", "Username for BasicAuth").Default("").Envar("BASIC_USERNAME").String()
+	basicAuthPass = kingpin.Flag("basic.password", "Password for BasicAuth").Default("").Envar("BASIC_PASSWORD").String()
+
 	certsArchivePath = "/tmp/" + certsArchiveFileName
 	ccdArchivePath   = "/tmp/" + ccdArchiveFileName
-
-	version = "2.0.0"
+	version          = "2.0.0"
 )
 
 var logLevels = map[string]log.Level{
@@ -492,6 +494,30 @@ func (oAdmin *OvpnAdmin) downloadCcdHandler(w http.ResponseWriter, r *http.Reque
 	http.ServeFile(w, r, ccdArchivePath)
 }
 
+func basicAuthHandler(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if checkBasicAuth(r) {
+			next(w, r)
+			return
+		}
+		w.Header().Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
+		w.WriteHeader(401)
+		w.Write([]byte("401 Unauthorized\n"))
+	}
+}
+
+func checkBasicAuth(r *http.Request) bool {
+	// if basic auth user and password not set return true
+	if *basicAuthUser == "" && *basicAuthPass == "" {
+		return true
+	}
+	u, p, ok := r.BasicAuth()
+	if !ok {
+		return false
+	}
+	return u == *basicAuthUser && p == *basicAuthPass
+}
+
 var app OpenVPNPKI
 
 func main() {
@@ -565,7 +591,7 @@ func main() {
 	staticBox := packr.New("static", "./frontend/static")
 	static := CacheControlWrapper(http.FileServer(staticBox))
 
-	http.Handle(*listenBaseUrl, http.StripPrefix(strings.TrimRight(*listenBaseUrl, "/"), static))
+	http.Handle(*listenBaseUrl, http.StripPrefix(strings.TrimRight(*listenBaseUrl, "/"), basicAuthHandler(static.ServeHTTP)))
 	http.HandleFunc(*listenBaseUrl+"api/server/settings", ovpnAdmin.serverSettingsHandler)
 	http.HandleFunc(*listenBaseUrl+"api/users/list", ovpnAdmin.userListHandler)
 	http.HandleFunc(*listenBaseUrl+"api/user/create", ovpnAdmin.userCreateHandler)
