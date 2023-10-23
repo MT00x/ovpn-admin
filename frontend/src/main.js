@@ -82,6 +82,11 @@ new Vue({
         }
       },
       {
+        label: 'IP',
+        field: 'ClientStaticIP',
+        filterable: true,        
+      },
+      {
         label: 'Actions',
         field: 'actions',
         sortable: false,
@@ -157,7 +162,15 @@ new Vue({
       // },
       {
         name: 'u-download-config',
-        label: 'Download config',
+        label: 'Download Tracer config',
+        class: 'btn-info',
+        showWhenStatus: 'Active',
+        showForServerRole: ['master', 'slave'],
+        showForModule: ["core"],
+      },
+      {
+        name: 'u-download-config2',
+        label: 'Download Client config',
         class: 'btn-info',
         showWhenStatus: 'Active',
         showForServerRole: ['master', 'slave'],
@@ -259,10 +272,32 @@ new Vue({
         _this.u.openvpnConfig = response.data;
       });
     })
+    _this.$root.$on('u-show-config2', function () {
+      _this.u.modalShowConfigVisible = true;
+      var data = new URLSearchParams();
+      data.append('username', _this.username);
+      axios.request(axios_cfg('api/user/config2/show', data, 'form'))
+      .then(function(response) {
+        _this.u.openvpnConfig = response.data;
+      });
+    })
     _this.$root.$on('u-download-config', function () {
       var data = new URLSearchParams();
       data.append('username', _this.username);
       axios.request(axios_cfg('api/user/config/show', data, 'form'))
+      .then(function(response) {
+        const blob = new Blob([response.data], { type: 'text/plain' })
+        const link = document.createElement('a')
+        link.href = URL.createObjectURL(blob)
+        link.download = _this.username + ".ovpn"
+        link.click()
+        URL.revokeObjectURL(link.href)
+      }).catch(console.error);
+    })
+    _this.$root.$on('u-download-config2', function () {
+      var data = new URLSearchParams();
+      data.append('username', _this.username);
+      axios.request(axios_cfg('api/user/config2/show', data, 'form'))
       .then(function(response) {
         const blob = new Blob([response.data], { type: 'text/plain' })
         const link = document.createElement('a')
